@@ -7,19 +7,16 @@
 //
 
 #import "JAContactsViewController.h"
-#import "JAUtility.h"
-#import "JAPastSearchCell.h"
-#import "JANormalSearchCell.h"
 
 @interface JAContactsViewController ()
 
-@property (nonatomic, strong) NSDictionary *allContacts;
-@property (nonatomic, strong) NSString *searchType;
-@property (nonatomic, strong) NSMutableArray *filteredContacts;
-@property (nonatomic, strong) NSMutableArray *filteredPastNameSearches;
-@property (nonatomic, strong) NSMutableArray *filteredPastKeywordSearches;
-@property (nonatomic, assign) BOOL loadPreviousSearches;
-@property (nonatomic, strong) UISearchDisplayController *searchController;
+@property (nonatomic) NSDictionary *allContacts;
+@property (nonatomic) JASearchType searchType;
+@property (nonatomic) NSMutableArray *filteredContacts;
+@property (nonatomic) NSMutableArray *filteredPastNameSearches;
+@property (nonatomic) NSMutableArray *filteredPastKeywordSearches;
+@property (nonatomic) BOOL loadPreviousSearches;
+@property (nonatomic) UISearchDisplayController *searchController;
 
 @property (nonatomic, weak) IBOutlet UISearchBar *searchBar;
 @property (nonatomic, weak) IBOutlet UITableView *tableView;
@@ -36,7 +33,7 @@
     [self.searchBar setShowsScopeBar:YES];
     [self.searchBar setScopeButtonTitles:@[JACONTACTSCOPETITLENAME, JACONTACTSCOPETITLEKEYWORD]];
     [self.searchBar setSelectedScopeButtonIndex:0];
-    self.searchType = JASEARCHTYPECONTACTNAME;
+    self.searchType = JASearchTypeContactName;
     
     //load the contacts dictionary
     self.allContacts = [[[JAUtility sharedInstance] loadContacts] mutableCopy];
@@ -54,6 +51,7 @@
     
     //set the responder to the keypad
     [self.searchBar becomeFirstResponder];
+
 }
 
 #pragma mark - UISearchBar Delegates
@@ -71,7 +69,7 @@
     
     //Realod the tableView data and keep the scopebar showing
     [self.tableView reloadData];
-    [self.searchBar setShowsScopeBar:YES];
+    [self.searchBar setShowsScopeBar:YES]; //property -- use point syntax
 }
 
 - (BOOL)searchBarShouldEndEditing:(UISearchBar *)searchBar
@@ -102,7 +100,7 @@
     NSPredicate *predicate = [NSPredicate predicateWithFormat:@"SELF contains[c] %@", searchText];
 
     //Filter by Contact Name
-    if ([self.searchType isEqualToString:JASEARCHTYPECONTACTNAME]) {
+    if (self.searchType == JASearchTypeContactName) {
         //Create a filtered array of past Contact Name searches
         arr = [[JAUtility sharedInstance] savedContactNameSearches];
         self.filteredPastNameSearches = [[arr filteredArrayUsingPredicate:predicate] mutableCopy];
@@ -127,7 +125,7 @@
         
         //Find the Contacts then save the search
         self.filteredContacts = [self findContact:cleanString];
-        [[JAUtility sharedInstance] popSavedSearch:cleanString withSearchType:self.searchType];
+        [[JAUtility sharedInstance] saveSearch:cleanString withSearchType:self.searchType];
     }
     
     //Turn the search display controller to inactive.
@@ -137,7 +135,7 @@
 - (void)searchBar:(UISearchBar *)searchBar selectedScopeButtonIndexDidChange:(NSInteger)selectedScope
 {
     //set the searchType iVar based on the scope
-    self.searchType = ([searchBar selectedScopeButtonIndex] == 0) ? JASEARCHTYPECONTACTNAME : JASEARCHTYPECONTACTKEYWORD;
+    self.searchType = ([searchBar selectedScopeButtonIndex] == 0) ? JASearchTypeContactName : JASearchTypeContactKeyword;
     
     //if there is a search string, then re-search using other scope
     if (self.searchBar.text) {
@@ -150,36 +148,56 @@
 
 - (int)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
 {
+    NSInteger rowCount;
+    
     if (tableView == self.searchController.searchResultsTableView) {
-        return ([self.searchType isEqualToString:JASEARCHTYPECONTACTNAME]) ? [self.filteredPastNameSearches count] : [self.filteredPastKeywordSearches count];
+        
+        if (self.searchType == JASearchTypeContactName) {
+            rowCount = [self.filteredPastNameSearches count];
+        }
+        if (self.searchType == JASearchTypeContactKeyword) {
+            rowCount = [self.filteredPastKeywordSearches count];
+        }
+        
+        return rowCount;
+        
     } else {
         if (self.loadPreviousSearches) {
-            return ([self.searchType isEqualToString:JASEARCHTYPECONTACTNAME]) ? [[[JAUtility sharedInstance] savedContactNameSearches] count] : [[[JAUtility sharedInstance] savedContactKeywordSearches] count];
+            
+            if (self.searchType == JASearchTypeContactName) {
+                rowCount = [[[JAUtility sharedInstance] savedContactNameSearches] count];
+            }
+            
+            if  (self.searchType == JASearchTypeContactKeyword ) {
+                rowCount = [[[JAUtility sharedInstance] savedContactKeywordSearches] count];
+            }
+            
         } else {
+
             return [self.filteredContacts count];
+            
         }
     }
 
     return 0;
     }
 
--(UITableViewCell *)tableView:(UITableView *)tableView
-        cellForRowAtIndexPath:(NSIndexPath *)indexPath
+-(UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
 {
     NSString *savedContact = nil;
     
     //Loading previous searches
     if (self.loadPreviousSearches) {
         
-        JAPastSearchCell *cell = [tableView dequeueReusableCellWithIdentifier:@"JAPastSearchCell"];
-        if (!cell)
-            cell = [[JAPastSearchCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:@"JAPastSearchCell"];
+        [tableView registerNib:[UINib nibWithNibName:@"JAPastSearchCell" bundle:nil] forCellReuseIdentifier:@"JAPastSearchCell"];
+        UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"JAPastSearchCell"];
         
         //put the description of the saved contact in the cell. Could be either the first name or the last name. Trim leading space if last name.
-        if ([self.searchType isEqualToString:JASEARCHTYPECONTACTNAME])
+        if (self.searchType == JASearchTypeContactName) {
             savedContact = [[[JAUtility sharedInstance] savedContactNameSearches] objectAtIndex:indexPath.row];
-        else
+        } else {
             savedContact = [[[JAUtility sharedInstance] savedContactKeywordSearches] objectAtIndex:indexPath.row];
+        }
         
         cell.textLabel.text = [savedContact.description stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
 
@@ -188,14 +206,17 @@
     
     //Dynamic keystroke search through previous searches using the Search Display Controller Results TableView
     if (tableView == self.searchController.searchResultsTableView) {
-        JAPastSearchCell *cell = [tableView dequeueReusableCellWithIdentifier:@"JAPastSearchCell"];
-        if (!cell)
-            cell = [[JAPastSearchCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:@"JAPastSearchCell"];
         
-        if ([self.searchType isEqualToString:JASEARCHTYPECONTACTNAME])
+        //this is required here since there is no prototype cell for the search display results tableview.
+        [tableView registerNib:[UINib nibWithNibName:@"JAPastSearchCell" bundle:nil] forCellReuseIdentifier:@"JAPastSearchCell"];
+        
+        UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"JAPastSearchCell"];
+        
+        if (self.searchType == JASearchTypeContactName) {
             savedContact = [self.filteredPastNameSearches objectAtIndex:indexPath.row];
-        else
+        } else {
             savedContact = [self.filteredPastKeywordSearches objectAtIndex:indexPath.row];
+        }
         
         cell.textLabel.text = [savedContact.description stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
         
@@ -203,10 +224,7 @@
     }
     else {
         //Displaying the results of a normal contact search
-        JANormalSearchCell *cell = [tableView dequeueReusableCellWithIdentifier:@"JANormalSearchCell"];
-        if (!cell)
-            cell = [[JANormalSearchCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:@"JANormalSearchCell"];
-        
+        UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"JANormalSearchCell"];
         cell.textLabel.text = [self.filteredContacts[indexPath.row] description];
         
         return cell;
@@ -218,21 +236,17 @@
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath
 {    
     if (self.tableView == tableView) {
-        //Normal tableview
-        if ([[self.tableView cellForRowAtIndexPath:indexPath] isKindOfClass:[JANormalSearchCell class]]) {
-            //Load the detail view
-            [self performSegueWithIdentifier:@"showContactDetails" sender:tableView];
-        } else {
-            //Switch off the previous searches flag to direct the tableView to the datasource of filtered searches
-            if (self.loadPreviousSearches) self.loadPreviousSearches = NO;
+  
+        //Switch off the previous searches flag to direct the tableView to the datasource of filtered searches
+        if (self.loadPreviousSearches) self.loadPreviousSearches = NO;
 
-            //Get the search string from the selected cell
-            NSString *searchString = [self.tableView cellForRowAtIndexPath:indexPath].textLabel.text;
-            
+        UITableViewCell *cell = [tableView cellForRowAtIndexPath:indexPath];
+        if ([cell.reuseIdentifier isEqualToString:@"JAPastSearchCell"]) {
             //Find the matching contacts and reload the tableView
-            self.filteredContacts = [self findContact:searchString];
+            self.filteredContacts = [self findContact:cell.textLabel.text];
             [self.tableView reloadData];
         }
+
     } else {
         //De-activate the search results view then search for the contacts from the selected row.
         [self.searchController setActive:NO animated:YES];
@@ -242,12 +256,18 @@
     }
 }
 
-
 #pragma mark - Storyboarding
 
 - (void)prepareForSegue:(UIStoryboardSegue *)segue sender:(id)sender
 {
-    [[segue destinationViewController] setTitle:[sender cellForRowAtIndexPath:[sender indexPathForSelectedRow]].textLabel.text];
+    
+    NSIndexPath *indexPath = [self.tableView indexPathForCell:sender];
+    
+    if ([segue.identifier isEqualToString:@"ShowContactDetails"]) {
+        if ([segue.destinationViewController respondsToSelector:@selector(setTitle:)]) {
+            [segue.destinationViewController setTitle:self.filteredContacts[indexPath.row]];
+        }
+    }
 }
 
 #pragma mark - Private Methods
@@ -261,21 +281,20 @@
     NSArray *keywords  = [self.allContacts objectForKey:@"keywords"];
     NSMutableArray *filteredArray = [[NSMutableArray alloc] init];
     
-    if ([self.searchType isEqualToString:JASEARCHTYPECONTACTNAME]) {
+    if (self.searchType == JASearchTypeContactName) {
         //find the contacts by name
         filteredArray = [[names filteredArrayUsingPredicate:predicate] mutableCopy];
     } else {
-        //find the contacts by keyword -- get an array of indexes
+        //find the contacts by keyword
         NSRegularExpression *regEx = [[NSRegularExpression alloc] initWithPattern:searchString options:NSRegularExpressionCaseInsensitive error:nil];
         
-        for (int i = 0; i < [keywords count]; i++) {
-            NSString *keyword = [keywords objectAtIndex:i];
+        [keywords enumerateObjectsUsingBlock:^(NSString *keyword, NSUInteger idx, BOOL *stop) {
             NSArray *matches = [regEx matchesInString:keyword options:0 range:NSMakeRange(0, keyword.length)];
             if ([matches count]) {
                 //use the current index to find the contact name -- add it to the filteredArray
-                [filteredArray addObject:[names objectAtIndex:i]];
+                [filteredArray addObject:[names objectAtIndex:idx]];
             }
-        }
+        }];
     }
     
     return filteredArray;

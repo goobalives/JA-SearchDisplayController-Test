@@ -8,9 +8,11 @@
 
 #import <Foundation/Foundation.h>
 
-#define JASEARCHTYPECOMPANY @"Company"
-#define JASEARCHTYPECONTACTNAME @"Contact-Name"
-#define JASEARCHTYPECONTACTKEYWORD @"Contact-Keyword"
+typedef NS_ENUM(NSInteger, JASearchType) {
+    JASearchTypeCompany,
+    JASearchTypeContactName,
+    JASearchTypeContactKeyword
+};
 
 @interface JAUtility : NSObject
 
@@ -19,11 +21,9 @@
 @property (nonatomic, strong) NSMutableArray *savedContactKeywordSearches;
 
 + (id)sharedInstance;
-
-- (BOOL)archiveSavedSearch:(NSString *)searchItem;
-- (void)popSavedSearch:(NSString *)savedSearch withSearchType:(NSString *)searchType;
-
 - (NSArray *)loadCompanies;
 - (NSArray *)loadContacts;
+- (void)saveSearch:(NSString *)searchToSave withSearchType:(JASearchType)searchType;
+- (BOOL)archiveSavedSearch:(JASearchType)searchType;
 
 @end

@@ -32,15 +32,15 @@
     BOOL success;
     JAUtility *sharedInstance = [JAUtility sharedInstance];
     
-    success = [sharedInstance archiveSavedSearch:JASEARCHTYPECOMPANY];
+    success = [sharedInstance archiveSavedSearch:JASearchTypeCompany];
     if (success) NSLog(@"Company searches saved.");
     else NSLog(@"Error: Company searches failed to save.");
     
-    success = [sharedInstance archiveSavedSearch:JASEARCHTYPECONTACTNAME];
+    success = [sharedInstance archiveSavedSearch:JASearchTypeContactName];
     if (success) NSLog(@"Contact Name searches saved.");
     else NSLog(@"Error: Contact Name searches failed to save.");
     
-    success = [sharedInstance archiveSavedSearch:JASEARCHTYPECONTACTKEYWORD];
+    success = [sharedInstance archiveSavedSearch:JASearchTypeContactKeyword];
     if (success) NSLog(@"Contact Keyword searches saved.");
     else NSLog(@"Error: Contact Keyword searches failed to save.");
 }

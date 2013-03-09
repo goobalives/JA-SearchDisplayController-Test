@@ -7,17 +7,16 @@
 //
 
 #import "JACompaniesViewController.h"
-#import "JAUtility.h"
-#import "JAPastSearchCell.h"
-#import "JANormalSearchCell.h"
 
 @interface JAViewController ()
 
 @property (nonatomic, assign) BOOL loadPreviousSearches;
+@property (nonatomic) JASearchType searchType;
 @property (nonatomic, strong) UISearchDisplayController *searchController;
 @property (nonatomic, strong) NSMutableArray *filteredPastSearches;
 @property (nonatomic, strong) NSMutableArray *filteredCompanies;
 
+// nonatomic first
 @property (weak, nonatomic) IBOutlet UISearchBar *searchBar;
 @property (weak, nonatomic) IBOutlet UITableView *tableView;
 
@@ -44,6 +43,8 @@
     
     self.searchController = searchController;
     
+    //set the searchType
+    self.searchType = JASearchTypeCompany;
 }
 
 #pragma mark - Search Bar Delegates
@@ -51,7 +52,8 @@
 - (void)searchBar:(UISearchBar *)searchBar textDidChange:(NSString *)searchText
 {        
     //Turn off the previous searches flag to direct the tableView to the datasource of filtered searches required by the Search Display Controller
-    if (self.loadPreviousSearches) self.loadPreviousSearches = NO;
+    if (self.loadPreviousSearches)
+        self.loadPreviousSearches = NO;
     
     //Create the predicate
     NSPredicate *predicate = [NSPredicate predicateWithFormat:@"SELF contains[c] %@", searchText];
@@ -59,9 +61,8 @@
     //Create a filtered array
     self.filteredPastSearches = [[[[JAUtility sharedInstance] savedCompanySearches] filteredArrayUsingPredicate:predicate] mutableCopy];
     
-    if (self.filteredPastSearches.count > 0) {
+    if ([self.filteredPastSearches count] > 0)
         [self.searchController.searchResultsTableView reloadData];
-    }
 }
 
 - (void)searchBarCancelButtonClicked:(UISearchBar *)searchBar
@@ -86,7 +87,7 @@
         self.filteredCompanies = [self findCompany:findString];
         
         //Save the new search to the list of saved searches
-        [[JAUtility sharedInstance] popSavedSearch:searchBar.text withSearchType:JASEARCHTYPECOMPANY];
+        [[JAUtility sharedInstance] saveSearch:searchBar.text withSearchType:JASearchTypeCompany];
     }
     
     //Turn the search display controller to inactive.
@@ -104,6 +105,7 @@
     //2. Full list of saved searches -- unarchived and loaded at start (Normal TableView)
     //3. Filtered list of companies -- that match a previous search or text entered manually.
     
+    //use isEqual
     if (tableView == self.searchDisplayController.searchResultsTableView) {
         return self.filteredPastSearches.count; //1.
     } else {
@@ -120,35 +122,35 @@
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
 {
     
-    //  if loading previous search items -- order is important here, since pressing cancel also ends editing (and calls the delegate searchBarTextDidEndEditing. self.loadPreviousSearches is set in the cancel method BEFORE the searchBarTextDidEndEditing is called.
+    //  If loading previous search items -- order is important here, since pressing cancel also ends editing (and calls the delegate searchBarTextDidEndEditing. self.loadPreviousSearches is set in the cancel method BEFORE the searchBarTextDidEndEditing is called.
     
     if (self.loadPreviousSearches) {
         
-        JAPastSearchCell *cell = [tableView dequeueReusableCellWithIdentifier:@"JAPastSearchCell"];
-        if (!cell) {
-            cell = [[JAPastSearchCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:@"JAPastSearchCell"];
-        }
-        cell.textLabel.text = [[[JAUtility sharedInstance] savedCompanySearches] objectAtIndex:indexPath.row];
+        //this is required here since there is no prototype cell for the search display results tableview.
+        [tableView registerNib:[UINib nibWithNibName:@"JAPastSearchCell" bundle:nil] forCellReuseIdentifier:@"JAPastSearchCell"];
         
+        UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"JAPastSearchCell" forIndexPath:indexPath];
+        cell.textLabel.text = [[[JAUtility sharedInstance] savedCompanySearches] objectAtIndex:indexPath.row];
         return cell;
     }
-
-    //if the user is typing out keys to match a previous search, then the search display controller will be running the results view
-    if (tableView == self.searchDisplayController.searchResultsTableView) {
-        JAPastSearchCell *cell = [tableView dequeueReusableCellWithIdentifier:@"JAPastSearchCell"];
-        if (!cell)
-            cell = [[JAPastSearchCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:@"JAPastSearchCell"];
-        cell.textLabel.text = self.filteredPastSearches[indexPath.row]; //use new indexing notation
+    
+    //  If the user is typing out keys to match a previous search, then the search display controller will be running the results view
+    if (tableView == self.searchController.searchResultsTableView) {
         
+        //this is required here since there is no prototype cell for the search display results tableview.
+        [tableView registerNib:[UINib nibWithNibName:@"JAPastSearchCell" bundle:nil] forCellReuseIdentifier:@"JAPastSearchCell"];
+
+        UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"JAPastSearchCell" forIndexPath:indexPath];
+        cell.textLabel.text = self.filteredPastSearches[indexPath.row];
         return cell;
+        
     } else {
-        //if the cell is a past search item then recall/instantiate the sub-class
-            JANormalSearchCell *cell = [tableView dequeueReusableCellWithIdentifier:@"JANormalSearchCell"];
-            if (!cell)
-                cell = [[JANormalSearchCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:@"JANormalSearchCell"];
-            cell.textLabel.text = self.filteredCompanies[indexPath.row]; //use new indexing notation
-            
-            return cell;
+        
+    //  If the cell is a past search item then recall/instantiate the sub-class
+        UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"JANormalSearchCell" forIndexPath:indexPath];
+        cell.textLabel.text = self.filteredCompanies[indexPath.row]; //use new indexing notation
+        return cell;
+        
     }
 }
 
@@ -160,16 +162,17 @@
         
         //  If we're in the normal tableview either the past searches are showing OR the a list of filtered companies is showing. Use the class of the cell to determine what to do.
         
-        if ([[tableView cellForRowAtIndexPath:indexPath] isKindOfClass:[JANormalSearchCell class]]) {
-            //Select from the filtered list of companies
-            [self performSegueWithIdentifier:@"showCompanyDetails" sender:tableView];
-        } else {
-            //Switch off the previous searches flag to direct the tableView to the datasource of filtered searches
-            if (self.loadPreviousSearches) self.loadPreviousSearches = NO;
-            
-            //Run a search against the list of companies. The search is proxied here using the JAUtility class.
+        //Switch off the previous searches flag to direct the tableView to the datasource of filtered searches
+        if (self.loadPreviousSearches) self.loadPreviousSearches = NO;
+
+        //Run a search against the list of companies. The search is proxied here using the JAUtility class.
+        UITableViewCell *cell = [self.tableView cellForRowAtIndexPath:indexPath];
+        if ([cell.reuseIdentifier isEqualToString:@"JAPastSearchCell"]) {
             [self matchCompanyAndDisplayResults:tableView forSelectedRow:indexPath];
+        } else {
+            // Perform the segue.
         }
+        
     } else {
         //When the user selects a cell here, they are selecting a previous search or bypassing a previous search.
         //The previous search is then used in the networked lookup. The search is proxied here using the JAUtility class.
@@ -184,7 +187,15 @@
 
 - (void)prepareForSegue:(UIStoryboardSegue *)segue sender:(id)sender
 {
-    [[segue destinationViewController] setTitle:[sender cellForRowAtIndexPath:[sender indexPathForSelectedRow]].textLabel.text];
+    //Filter the segue
+    
+    NSIndexPath *indexPath = [self.tableView indexPathForCell:sender];
+    
+    if ([segue.identifier isEqualToString:@"ShowCompanyDetails"]) {
+        if ([segue.destinationViewController respondsToSelector:@selector(setTitle:)]) {
+            [segue.destinationViewController setTitle:self.filteredCompanies[indexPath.row]];
+        }
+    }
 }
 
 #pragma mark - Private Methods
